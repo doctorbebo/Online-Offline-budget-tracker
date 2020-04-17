@@ -1,6 +1,8 @@
 let transactions = [];
 let myChart;
 
+
+
 fetch("/api/transaction")
   .then(response => {
     return response.json();
@@ -112,35 +114,48 @@ function sendTransaction(isAdding) {
   populateTable();
   populateTotal();
   
-  // also send to server
-  fetch("/api/transaction", {
-    method: "POST",
-    body: JSON.stringify(transaction),
-    headers: {
-      Accept: "application/json, text/plain, */*",
-      "Content-Type": "application/json"
-    }
-  })
-  .then(response => {    
-    return response.json();
-  })
-  .then(data => {
-    if (data.errors) {
-      errorEl.textContent = "Missing Information";
-    }
-    else {
+  // send local saved data first to server
+  sendSavedData((res)=>{
+    if(res === true)
+    {
+      // then send this transaction to server
+      fetch("/api/transaction", {
+        method: "POST",
+        body: JSON.stringify(transaction),
+        headers: {
+          Accept: "application/json, text/plain, */*",
+          "Content-Type": "application/json"
+        }
+      })
+      .then(response => {    
+        return response.json();
+      })
+      .then(data => {
+        if (data.errors) {
+          errorEl.textContent = "Missing Information";
+        }
+        else {
+          // clear form
+          nameEl.value = "";
+          amountEl.value = "";
+        }
+      })
+      .catch(err => {
+        // fetch failed, so save in indexed db
+        addData(transaction);
+
+        // clear form
+        nameEl.value = "";
+        amountEl.value = "";
+      }); 
+    }else
+    {
+      addData(transaction);
+
       // clear form
       nameEl.value = "";
       amountEl.value = "";
     }
-  })
-  .catch(err => {
-    // fetch failed, so save in indexed db
-    saveRecord(transaction);
-
-    // clear form
-    nameEl.value = "";
-    amountEl.value = "";
   });
 }
 
@@ -151,3 +166,97 @@ document.querySelector("#add-btn").onclick = function() {
 document.querySelector("#sub-btn").onclick = function() {
   sendTransaction(false);
 };
+
+
+  function intializeDataBase(cb)
+  {
+    console.log("initializing database");  
+    const request = window.indexedDB.open("failedTransactions", 1);
+    // Create schema
+    request.onupgradeneeded = event => {
+      console.log("upgrade");
+      const db = event.target.result;
+      // Creates an object store with a listID keypath that can be used to query on.
+      transactionStore = db.createObjectStore("attempedTransactions", {keyPath: "date" });
+    };
+  
+    request.onsuccess = (event) => {
+      console.log("sucess");
+      cb(event);
+      event.target.result.close();
+      }
+  }
+
+  function addData (data)
+  {
+    intializeDataBase((event)=>
+    {
+      const db = event.target.result;
+      db.transaction("attempedTransactions", "readwrite").objectStore("attempedTransactions").add(data);
+    })
+  }
+
+  function sendSavedData(cb)
+  { 
+    intializeDataBase((event)=>
+    {
+      sendSecessful = true;
+      const db = event.target.result
+      const tran = db.transaction("attempedTransactions", "readwrite")
+      const objStore = tran.objectStore("attempedTransactions")
+      const req = objStore.getAll();
+      req.onsuccess  = () =>{
+        const list = req.result;
+        list.forEach((e, i) =>
+          {
+
+            if(sendSecessful === false)
+            {
+              return;
+            }
+
+            console.log(e);
+            console.log(`index: ${i + 1}`);
+
+            fetch("/api/transaction", {
+              method: "POST",
+              body: JSON.stringify(e),
+              headers: {
+                Accept: "application/json, text/plain, */*",
+                "Content-Type": "application/json"
+              }
+            })
+            .then(() => {  
+
+              deleteData(e.date);
+
+            }).catch(err  =>
+              {
+                console.log("sent failed");
+                sendSecessful = false
+              });
+          });
+        cb(sendSecessful);  
+      }
+    });
+  }
+
+  function deleteData (keyIndex)
+  {
+    intializeDataBase((event)=>
+    {
+      const db = event.target.result
+      const delTran = db.transaction("attempedTransactions", "readwrite");
+      const delStore = delTran.objectStore("attempedTransactions");
+      const delreq  = delStore.delete(keyIndex);
+      delreq.onsuccess = () =>
+      {
+        console.log("item deleted at" + keyIndex);
+      }
+      delreq.onerror = () =>
+      {
+        console.log("error item not deleted at:" + keyIndex);
+      }
+    })
+  }
+
