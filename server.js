@@ -15,7 +15,7 @@ app.use(express.json());
 
 app.use(express.static("public"));
 
-var MONGODB_URI = "mongodb+srv://byronrb92:Brb1992!!@cluster0-fbknd.mongodb.net/test?retryWrites=true&w=majority" || "mongodb://localhost/budget";
+var MONGODB_URI = "mongodb://bebo92:Brb1992!!@ds145128.mlab.com:45128/heroku_9293s21d" || "mongodb://localhost/budget";
 const options = {
   useNewUrlParser: true,
   useCreateIndex: true,
