@@ -15,10 +15,15 @@ app.use(express.json());
 
 app.use(express.static("public"));
 
-mongoose.connect("mongodb://localhost/budget", {
+var mongoose = require("mongoose");
+var MONGODB_URI = process.env.MONGODB_URL || "mongodb://localhost/budget";
+const options = {
   useNewUrlParser: true,
-  useFindAndModify: false
-});
+  useCreateIndex: true,
+  useFindAndModify: false,
+  family: 4 // Use IPv4, skip trying IPv6
+};
+mongoose.connect(MONGODB_URI,options)
 
 // routes
 app.use(require("./routes/api.js"));
